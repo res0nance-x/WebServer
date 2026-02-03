@@ -36,3 +36,5 @@ A lightweight, modern web server built in Kotlin with directory browsing and med
 
 No external dependencies for core functionality
 Responsive HTML5 interface with vanilla JavaScript
+
+For this and other projects check out https://www.res0nance.cc/index.html
