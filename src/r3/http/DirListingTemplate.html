@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Index of $.uri</title>
+    <style>
+        body {
+            font-family: Segoe UI, Arial, Helvetica, sans-serif;
+            margin: 16px
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px
+        }
+
+        th,
+        td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+            font-size: 14px
+        }
+
+        th {
+            cursor: pointer;
+            background: #f8f8f8;
+            user-select: none
+        }
+
+        tr:hover {
+            background: #f1f1f1
+        }
+
+        /* Visual selection state for keyboard navigation */
+        tr.selected {
+            background: #dceefb;
+        }
+
+        .muted {
+            color: #666;
+            font-size: 13px
+        }
+
+        #filterRow {
+            display: flex;
+            gap: 8px;
+            align-items: center
+        }
+
+        #filterInput {
+            flex: 1;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px
+        }
+
+        #viewerOverlay {
+            position: fixed;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999
+        }
+
+        #viewerBox {
+            background: #fff;
+            color: #000;
+            max-width: 95%;
+            max-height: 95%;
+            overflow: auto;
+            padding: 12px;
+            border-radius: 6px
+        }
+
+        #viewerBox img,
+        #viewerBox video,
+        #viewerBox audio {
+            max-width: 100%;
+            max-height: 80vh
+        }
+
+        #viewerControls {
+            display: flex;
+            gap: 6px;
+            justify-content: space-between;
+            margin-bottom: 8px
+        }
+
+        #viewerControls button {
+            padding: 4px 8px
+        }
+    </style>
+</head>
+
+<body>
+<h1>Index of $.uri</h1>
+<div id="filterRow"><label for="filterInput">Filter: </label>
+    <input id="filterInput" placeholder="e.g. *.jpg"/>
+    <div class="muted">
+        <button id="clearFilter">Clear</button>
+    </div>
+</div>
+
+<table id="dirTable">
+    <thead>
+    <tr>
+        <th data-sort="name">Name ▲</th>
+        <th data-sort="size">Size</th>
+        <th data-sort="modified">Last modified</th>
+    </tr>
+    </thead>
+    <tbody>
+    $.rows
+    </tbody>
+</table>
+
+<script>
+    var baseUri = "$.baseUri";
+    // glob to regex (supports * and ?)
+    function globToRegex(g) {
+        if (!g) return null;
+        var s = '^';
+        for (var i = 0; i < g.length; i++) {
+            var c = g.charAt(i);
+            if (c === '*') s += '.*';
+            else if (c === '?') s += '.';
+            else s += c.replace(/[$\^+?.()|{}\[\]\\]/g, '\\$&');
+        }
+        s += '$';
+        return new RegExp(s, 'i');
+    }
+
+    function getVisibleRows() {
+        var rows = Array.from(document.querySelectorAll('#dirTable tbody tr'));
+        return rows.filter(function (r) { return !(r.style && r.style.display === 'none'); });
+    }
+
+    // selection helpers for keyboard navigation
+    if (typeof window.__selectedRowIndex !== 'number') window.__selectedRowIndex = -1;
+
+    // autoplay state
+    if (typeof window.__autoplayEnabled !== 'boolean') window.__autoplayEnabled = false;
+
+    function clearSelection() {
+        var rows = Array.from(document.querySelectorAll('#dirTable tbody tr'));
+        rows.forEach(function (r) { r.classList.remove('selected'); });
+        window.__selectedRowIndex = -1;
+    }
+
+    function setSelectionIndex(idx) {
+        var rows = getVisibleRows();
+        if (rows.length === 0) { clearSelection(); return; }
+        if (idx < 0) idx = 0;
+        if (idx >= rows.length) idx = rows.length - 1;
+        // remove previous selection from all visible rows (robust against reordering)
+        rows.forEach(function (r) { r.classList.remove('selected'); });
+        window.__selectedRowIndex = idx;
+        var tr = rows[idx];
+        if (!tr) { window.__selectedRowIndex = -1; return; }
+        tr.classList.add('selected');
+        try { tr.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) { /* ignore */ }
+    }
+
+    function ensureSelectionVisible() {
+        var rows = getVisibleRows();
+        if (rows.length === 0) { clearSelection(); return; }
+        if (window.__selectedRowIndex < 0 || window.__selectedRowIndex >= rows.length) {
+            setSelectionIndex(0);
+        } else {
+            // reapply class in case DOM was reordered
+            rows.forEach(function (r) { r.classList.remove('selected'); });
+            rows[window.__selectedRowIndex].classList.add('selected');
+        }
+    }
+
+    function filterTable() {
+        var v = document.getElementById('filterInput').value;
+        var re = globToRegex(v);
+        var tb = document.getElementById('dirTable').tBodies[0];
+        for (var i = 0; i < tb.rows.length; i++) {
+            var r = tb.rows[i];
+            var name = r.getAttribute('data-name');
+            r.style.display = (re == null || re.test(name)) ? '' : 'none';
+        }
+        // after filtering, ensure selection is valid
+        ensureSelectionVisible();
+    }
+
+    document.getElementById('filterInput').addEventListener('input', filterTable);
+    document.getElementById('clearFilter').addEventListener('click', function () { document.getElementById('filterInput').value = ''; filterTable(); });
+
+    function sortTable(by, asc) {
+        var tb = document.getElementById('dirTable').tBodies[0];
+        var rows = Array.from(tb.rows).filter(function (r) { return r.style.display !== 'none' });
+        rows.sort(function (a, b) {
+            if (by === 'name') {
+                var A = a.getAttribute('data-name').toLowerCase(); var B = b.getAttribute('data-name').toLowerCase(); return A.localeCompare(B);
+            } else if (by === 'size') {
+                var A = parseInt(a.getAttribute('data-size')); var B = parseInt(b.getAttribute('data-size')); return A - B;
+            } else {
+                var A = parseInt(a.getAttribute('data-mod')); var B = parseInt(b.getAttribute('data-mod')); return A - B;
+            }
+        });
+        if (!asc) rows.reverse();
+        for (var i = 0; i < rows.length; i++) tb.appendChild(rows[i]);
+        // after sorting, re-ensure selection
+        ensureSelectionVisible();
+    }
+
+    (function () {
+        var currentSort = { by: 'name', asc: true };
+        var headers = document.querySelectorAll('#dirTable th');
+        headers.forEach(function (h) {
+            h.addEventListener('click', function () {
+                var by = this.getAttribute('data-sort');
+                if (currentSort.by === by) currentSort.asc = !currentSort.asc; else { currentSort.by = by; currentSort.asc = true; }
+                headers.forEach(function (x) { var s = x.getAttribute('data-sort'); x.innerText = x.innerText.replace(/ ▲| ▼/, ''); if (s === currentSort.by) x.innerText += currentSort.asc ? ' ▲' : ' ▼'; });
+                sortTable(currentSort.by, currentSort.asc);
+            });
+        });
+        sortTable('name', true);
+    })();
+
+    // Build list of viewable items from the table rows (called when viewer opens)
+    function buildViewableList(currentHref) {
+        try {
+            var rows = Array.from(document.querySelectorAll('#dirTable tbody tr'));
+            var list = [];
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                if (!r) continue;
+                if (r.style && r.style.display === 'none') continue; // skip hidden
+                if (r.getAttribute('data-isdir') === 'd') continue; // skip directories
+                var name = r.getAttribute('data-name') || '';
+                var href = r.getAttribute('data-href') || (r.querySelector('a') ? r.querySelector('a').getAttribute('href') : null);
+                if (!href) continue;
+                try { href = (new URL(href, location.href)).href; } catch (_) { /* keep original */ }
+                var ext = getExt(name);
+                if (!(isTextExt(ext) || isImageExt(ext) || isAudioExt(ext) || isVideoExt(ext))) continue; // skip non-viewable
+                list.push({ href: href, name: name });
+            }
+            window.__viewableList = list;
+            // find current index
+            var idx = -1;
+            if (currentHref) {
+                try { var ch = (new URL(currentHref, location.href)).href; } catch (_) { ch = currentHref; }
+                for (var j = 0; j < list.length; j++) { if (list[j].href === ch) { idx = j; break; } }
+            }
+            window.__currentViewerIndex = idx;
+            console.debug('buildViewableList', list.length, 'currentIndex', idx);
+            return list;
+        } catch (e) { console.error('buildViewableList failed', e); window.__viewableList = []; window.__currentViewerIndex = -1; return []; }
+    }
+
+    // navigate to next/previous viewable file (skip directories and non-viewable types)
+    function navigateViewer(dir) {
+        try {
+            if (!window.__viewableList || window.__viewableList.length === 0) { buildViewableList(window.__currentViewerHref); }
+            var list = window.__viewableList || [];
+            if (list.length === 0) return;
+            var idx = (typeof window.__currentViewerIndex === 'number') ? window.__currentViewerIndex : -1;
+            if (idx < 0) {
+                // try to find by href
+                for (var k = 0; k < list.length; k++) { if (list[k].href === window.__currentViewerHref) { idx = k; break; } }
+            }
+            if (idx < 0) idx = 0;
+            var next = (idx + dir + list.length) % list.length;
+            if (next < 0) next += list.length;
+            var item = list[next];
+            if (!item) return;
+            console.debug('navigateViewer to', next, item.href, item.name);
+            window.__currentViewerIndex = next;
+            window.__currentViewerHref = item.href;
+            window.__currentViewerName = item.name;
+            closeViewer();
+            openViewer(item.href, item.name);
+        } catch (e) { console.error('navigateViewer failed', e); }
+    }
+
+    // Toggle autoplay on/off
+    function toggleAutoplay() {
+        try {
+            window.__autoplayEnabled = !window.__autoplayEnabled;
+            console.debug('toggleAutoplay', window.__autoplayEnabled);
+            updateAutoplayButton();
+            if (window.__autoplayEnabled) {
+                // start autoplay for current item
+                scheduleAutoplayNext();
+            } else {
+                // cancel any pending autoplay
+                clearAutoplayTimers();
+            }
+        } catch (e) { console.error('toggleAutoplay failed', e); }
+    }
+
+    // Update the autoplay button appearance
+    function updateAutoplayButton() {
+        try {
+            var btn = document.querySelector('#viewerAutoplay');
+            if (!btn) return;
+            if (window.__autoplayEnabled) {
+                btn.textContent = '⏸'; // pause icon when autoplay is active
+                btn.style.background = '#4CAF50';
+                btn.style.color = 'white';
+            } else {
+                btn.textContent = '▶'; // play icon when autoplay is inactive
+                btn.style.background = '';
+                btn.style.color = '';
+            }
+        } catch (e) { console.error('updateAutoplayButton failed', e); }
+    }
+
+    // Clear any autoplay timers
+    function clearAutoplayTimers() {
+        if (window.__autoplayTimer) {
+            clearTimeout(window.__autoplayTimer);
+            window.__autoplayTimer = null;
+        }
+    }
+
+    // Schedule the next autoplay navigation based on current media type
+    function scheduleAutoplayNext() {
+        try {
+            clearAutoplayTimers();
+            if (!window.__autoplayEnabled) return;
+
+            var name = window.__currentViewerName || '';
+            var ext = getExt(name);
+
+            // For video and audio, we attach an 'ended' event listener
+            // For images and text, we use a timer
+            if (isVideoExt(ext)) {
+                var video = document.querySelector('#viewerBox video');
+                if (video) {
+                    video.addEventListener('ended', function onVideoEnded() {
+                        video.removeEventListener('ended', onVideoEnded);
+                        if (window.__autoplayEnabled) navigateViewer(1);
+                    });
+                    console.debug('autoplay: waiting for video to end');
+                }
+            } else if (isAudioExt(ext)) {
+                var audio = document.querySelector('#viewerBox audio');
+                if (audio) {
+                    audio.addEventListener('ended', function onAudioEnded() {
+                        audio.removeEventListener('ended', onAudioEnded);
+                        if (window.__autoplayEnabled) navigateViewer(1);
+                    });
+                    console.debug('autoplay: waiting for audio to end');
+                }
+            } else if (isImageExt(ext)) {
+                var img = document.querySelector('#viewerBox img');
+                if (img) {
+                    if (img.complete) {
+                        // image already loaded, wait 3 seconds
+                        window.__autoplayTimer = setTimeout(function() {
+                            if (window.__autoplayEnabled) navigateViewer(1);
+                        }, 3000);
+                        console.debug('autoplay: image loaded, waiting 3s');
+                    } else {
+                        // wait for image to load, then wait 3 seconds
+                        img.addEventListener('load', function onImgLoad() {
+                            img.removeEventListener('load', onImgLoad);
+                            window.__autoplayTimer = setTimeout(function() {
+                                if (window.__autoplayEnabled) navigateViewer(1);
+                            }, 3000);
+                            console.debug('autoplay: image loaded, waiting 3s');
+                        });
+                        // also handle error case
+                        img.addEventListener('error', function onImgError() {
+                            img.removeEventListener('error', onImgError);
+                            window.__autoplayTimer = setTimeout(function() {
+                                if (window.__autoplayEnabled) navigateViewer(1);
+                            }, 3000);
+                            console.debug('autoplay: image error, waiting 3s');
+                        });
+                    }
+                }
+            } else {
+                // text or other content - wait 3 seconds
+                window.__autoplayTimer = setTimeout(function() {
+                    if (window.__autoplayEnabled) navigateViewer(1);
+                }, 3000);
+                console.debug('autoplay: text/other content, waiting 3s');
+            }
+        } catch (e) { console.error('scheduleAutoplayNext failed', e); }
+    }
+
+    // Viewer helpers: determine extension and type
+    function getExt(name) { var i = name.lastIndexOf('.'); return i >= 0 ? name.substring(i + 1).toLowerCase() : '' }
+    function isTextExt(ext) { return ['txt', 'md', 'log', 'kt', 'java', 'xml', 'html', 'css', 'js', 'json', 'yaml', 'yml'].indexOf(ext) >= 0 }
+    function isImageExt(ext) { return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].indexOf(ext) >= 0 }
+    function isAudioExt(ext) { return ['mp3', 'wav', 'ogg', 'm4a'].indexOf(ext) >= 0 }
+    function isVideoExt(ext) { return ['mp4', 'webm', 'ogg', 'mkv'].indexOf(ext) >= 0 }
+
+    // Intercept link clicks; directories ('d') are allowed to navigate normally
+    function openLink(ev, el) {
+        try {
+            var tr = el.closest('tr');
+            if (!tr) return true;
+            var isDir = tr.getAttribute('data-isdir');
+            if (isDir === 'd') return true;
+            // If user used modifier keys or middle-click, allow the browser to open the link (raw in new tab)
+            if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey || ev.button === 1)) {
+                return true;
+            }
+            ev.preventDefault();
+            // use the canonical data-href set on the row to avoid relative/escaping mismatches
+            var href = tr.getAttribute('data-href') || el.getAttribute('href');
+            var name = tr.getAttribute('data-name') || '';
+            openViewer(href, name);
+        } catch (e) { console.error('openLink error', e); return true; }
+    }
+
+    // click on a row selects it (and doesn't override link click behavior)
+    document.querySelector('#dirTable tbody').addEventListener('click', function (ev) {
+        try {
+            var t = ev.target || ev.srcElement;
+            while (t && t.nodeType !== 1) t = t.parentElement;
+            if (!t) return;
+            var tr = t.closest('tr');
+            if (!tr) return;
+            var rows = getVisibleRows();
+            var idx = rows.indexOf(tr);
+            if (idx >= 0) setSelectionIndex(idx);
+        } catch (e) { }
+    }, false);
+
+    function openViewer(href, name) {
+        // remove existing viewer if any
+        closeViewer();
+        var ext = getExt(name);
+    var overlay = document.createElement('div'); overlay.id = 'viewerOverlay';
+    var box = document.createElement('div'); box.id = 'viewerBox';
+    var controls = document.createElement('div'); controls.id = 'viewerControls'; controls.style.textAlign = 'right'; controls.innerHTML = '<div id="viewerInfo" style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span id="viewerInfoName"></span> <span id="viewerPosition" class="muted" style="margin-left:8px;font-size:13px"></span></div><div><button id="viewerAutoplay" type="button" aria-label="toggle autoplay" title="Toggle autoplay">▶</button> <button id="viewerPrev" type="button" aria-label="previous">\u2190</button> <button id="viewerBack" type="button" aria-label="close">x</button> <button id="viewerNext" type="button" aria-label="next">\u2192</button></div>';
+    box.appendChild(controls);
+
+        if (isTextExt(ext)) {
+            openTextViewer(href, box);
+        } else if (isImageExt(ext)) {
+            openImageViewer(href, box);
+        } else if (isAudioExt(ext)) {
+            openAudioViewer(href, box);
+        } else if (isVideoExt(ext)) {
+            openVideoViewer(href, box);
+        } else {
+            // fallback: try to display as text
+            openTextViewer(href, box);
+        }
+
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        // make overlay focusable and focus it so key events are more reliably handled
+        overlay.tabIndex = 0;
+        overlay.focus();
+        console.debug('openViewer', href, name);
+        // viewer controls: attach handlers via delegated click listener on the overlay for reliability
+        var controlsEl = box.querySelector('#viewerControls') || controls;
+        if (!controlsEl) console.debug('controlsEl not found');
+        // Delegated click handler will catch clicks on Prev/Next/Close reliably
+        window.__viewerClickHandler = function (e) {
+            try {
+                var t = e.target || e.srcElement;
+                // if the target is a text node (nodeType===3) walk up to the nearest element
+                while (t && t.nodeType !== 1) { t = t.parentElement; }
+                if (!t) return;
+                var prev = t.closest && t.closest('#viewerPrev');
+                var next = t.closest && t.closest('#viewerNext');
+                var back = t.closest && t.closest('#viewerBack');
+                var autoplay = t.closest && t.closest('#viewerAutoplay');
+                if (autoplay) { console.debug('viewerAutoplay clicked (delegated)'); toggleAutoplay(); e.stopPropagation(); e.preventDefault(); return; }
+                if (prev) { console.debug('viewerPrev clicked (delegated)'); navigateViewer(-1); e.stopPropagation(); e.preventDefault(); return; }
+                if (next) { console.debug('viewerNext clicked (delegated)'); navigateViewer(1); e.stopPropagation(); e.preventDefault(); return; }
+                if (back) { console.debug('viewerBack clicked (delegated)'); closeViewer(); e.stopPropagation(); e.preventDefault(); return; }
+            } catch (err) { console.error('viewerClickHandler error', err); }
+        };
+        overlay.addEventListener('click', window.__viewerClickHandler);
+        // Also add explicit listeners on the buttons as a fallback (use controlsEl)
+        try {
+            if (controlsEl) {
+                var fbtnAutoplay = controlsEl.querySelector('#viewerAutoplay'); if (fbtnAutoplay) { fbtnAutoplay.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); toggleAutoplay(); }); }
+                var fbtnPrev = controlsEl.querySelector('#viewerPrev'); if (fbtnPrev) { fbtnPrev.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); navigateViewer(-1); }); }
+                var fbtnNext = controlsEl.querySelector('#viewerNext'); if (fbtnNext) { fbtnNext.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); navigateViewer(1); }); }
+                var fbtnBack = controlsEl.querySelector('#viewerBack'); if (fbtnBack) { fbtnBack.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); closeViewer(); }); }
+            }
+        } catch (_) { /* ignore */ }
+        // add Escape-key and arrow-key handler to control viewer. Attach to both overlay and document (capture)
+        window.__viewerKeyHandler = function (e) { if (e.key === 'Escape' || e.keyCode === 27) { console.debug('key Escape'); closeViewer(); } else if (e.key === 'ArrowLeft' || e.keyCode === 37) { console.debug('key ArrowLeft'); navigateViewer(-1); } else if (e.key === 'ArrowRight' || e.keyCode === 39) { console.debug('key ArrowRight'); navigateViewer(1); } };
+        overlay.addEventListener('keydown', window.__viewerKeyHandler);
+        document.addEventListener('keydown', window.__viewerKeyHandler, true);
+        // remember targets so we can remove listeners later
+        window.__viewerKeyTargetOverlay = overlay;
+        window.__viewerKeyTargetDocument = document;
+
+        // remember current name and href (store absolute href to avoid relative/encoding mismatches)
+        try { window.__currentViewerHref = (new URL(href, location.href)).href; } catch (_) { window.__currentViewerHref = href; }
+        window.__currentViewerName = name;
+        // build the list of viewable items now so navigation works immediately
+        try { buildViewableList(window.__currentViewerHref); } catch (_) { }
+        // populate filename and position in the viewer header
+        try {
+            var infoName = overlay.querySelector('#viewerInfoName');
+            var infoPos = overlay.querySelector('#viewerPosition');
+            if (infoName) infoName.textContent = name || '';
+            var list = window.__viewableList || buildViewableList(window.__currentViewerHref) || [];
+            var idx = (typeof window.__currentViewerIndex === 'number') ? window.__currentViewerIndex : -1;
+            if (idx < 0) { for (var j = 0; j < list.length; j++) { if (list[j].href === window.__currentViewerHref) { idx = j; break; } } window.__currentViewerIndex = idx; }
+            if (infoPos) { if (list.length > 0 && idx >= 0) infoPos.textContent = (idx + 1) + ' / ' + list.length; else infoPos.textContent = ''; }
+        } catch (_) { }
+        // update autoplay button state to reflect current setting
+        updateAutoplayButton();
+        // if autoplay is enabled, schedule the next item
+        if (window.__autoplayEnabled) {
+            scheduleAutoplayNext();
+        }
+    }
+
+    function closeViewer() {
+        // clear any autoplay timers
+        clearAutoplayTimers();
+        var ex = document.getElementById('viewerOverlay');
+        if (ex) { document.body.removeChild(ex); }
+        if (window.__viewerKeyHandler) {
+            try { if (window.__viewerKeyTargetOverlay) window.__viewerKeyTargetOverlay.removeEventListener('keydown', window.__viewerKeyHandler); } catch (_) { }
+            try { if (window.__viewerKeyTargetDocument) window.__viewerKeyTargetDocument.removeEventListener('keydown', window.__viewerKeyHandler, true); } catch (_) { }
+            window.__viewerKeyHandler = null;
+            window.__viewerKeyTargetOverlay = null;
+            window.__viewerKeyTargetDocument = null;
+        }
+        if (window.__viewerClickHandler) {
+            try { if (window.__viewerKeyTargetOverlay) window.__viewerKeyTargetOverlay.removeEventListener('click', window.__viewerClickHandler); } catch (_) { }
+            window.__viewerClickHandler = null;
+        }
+    }
+
+    // Note: we intentionally avoid using the history API for the viewer. Closing is handled via DOM removal
+    // and Escape key; no popstate listener is required.
+
+    function openTextViewer(href, container) {
+        var el = document.createElement('pre'); el.style.whiteSpace = 'pre-wrap'; el.style.wordBreak = 'break-word'; el.textContent = 'Loading...';
+        container.appendChild(el);
+        fetch(href).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).then(function (t) { el.textContent = t; }).catch(function (err) { el.textContent = 'Failed to load: ' + err });
+    }
+
+    function openImageViewer(href, container) {
+        var img = document.createElement('img'); img.src = href; img.alt = ''; container.appendChild(img);
+    }
+
+    function openAudioViewer(href, container) {
+        var a = document.createElement('audio'); a.controls = true; a.autoplay = true; a.src = href; container.appendChild(a);
+    }
+
+    function openVideoViewer(href, container) {
+        var v = document.createElement('video'); v.controls = true; v.autoplay = true; v.src = href; container.appendChild(v);
+    }
+
+    // Global shortcut: Ctrl+Left or Alt+Up -> navigate to parent directory (unless an input is focused or viewer open)
+    document.addEventListener('keydown', function (e) {
+        try {
+            if (document.getElementById('viewerOverlay')) return; // viewer is open, don't navigate away
+            var t = e.target || e.srcElement;
+            while (t && t.nodeType !== 1) { t = t.parentElement; }
+            if (!t) return;
+            var tag = (t.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || t.isContentEditable) return; // don't intercept typing
+            var ctrlLeft = (e.ctrlKey || e.metaKey) && (e.key === 'ArrowLeft' || e.keyCode === 37);
+            var altUp = e.altKey && (e.key === 'ArrowUp' || e.keyCode === 38);
+            if (ctrlLeft || altUp) {
+                e.preventDefault();
+                var p = location.pathname;
+                if (p.endsWith('/')) p = p.slice(0, -1);
+                var idx = p.lastIndexOf('/');
+                var parent = (idx <= 0) ? '/' : p.substring(0, idx) + '/';
+                // preserve query/hash
+                location.href = parent + location.search + location.hash;
+            }
+        } catch (err) { console.error('global navigation key failed', err); }
+    }, false);
+
+    // Keyboard navigation for rows: up/down to change selection, Enter to open, Ctrl+Enter to open raw in new tab
+    document.addEventListener('keydown', function (e) {
+        try {
+            // don't interact while viewer open or while typing in inputs
+            if (document.getElementById('viewerOverlay')) return;
+            var t = e.target || e.srcElement;
+            while (t && t.nodeType !== 1) { t = t.parentElement; }
+            if (!t) return;
+            var tag = (t.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || t.isContentEditable) return; // typing
+
+            if (e.key === 'ArrowDown' || e.keyCode === 40) {
+                e.preventDefault();
+                var rows = getVisibleRows();
+                if (rows.length === 0) return;
+                var idx = (typeof window.__selectedRowIndex === 'number') ? window.__selectedRowIndex : -1;
+                if (idx < 0 || idx >= rows.length - 1) setSelectionIndex(0); else setSelectionIndex(idx + 1);
+                return;
+            }
+            if (e.key === 'ArrowUp' || e.keyCode === 38) {
+                e.preventDefault();
+                var rows = getVisibleRows();
+                if (rows.length === 0) return;
+                var idx = (typeof window.__selectedRowIndex === 'number') ? window.__selectedRowIndex : -1;
+                if (idx <= 0) setSelectionIndex(rows.length - 1); else setSelectionIndex(idx - 1);
+                return;
+            }
+
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                var rows = getVisibleRows();
+                var idx = (typeof window.__selectedRowIndex === 'number') ? window.__selectedRowIndex : -1;
+                if (idx < 0 || idx >= rows.length) return;
+                e.preventDefault();
+                var tr = rows[idx];
+                var href = tr.getAttribute('data-href') || (tr.querySelector('a') ? tr.querySelector('a').getAttribute('href') : null);
+                if (!href) return;
+                var isDir = tr.getAttribute('data-isdir');
+                if (e.ctrlKey || e.metaKey) {
+                    // open raw in new tab
+                    try { window.open(href, '_blank'); } catch (_) { }
+                } else {
+                    if (isDir === 'd') {
+                        // navigate normally for directories
+                        location.href = href;
+                    } else {
+                        openViewer(href, tr.getAttribute('data-name') || '');
+                    }
+                }
+                return;
+            }
+        } catch (err) { console.error('keyboard nav failed', err); }
+    }, false);
+
+</script>
+</body>
+
+</html>
