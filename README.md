@@ -17,12 +17,13 @@ A lightweight, modern web server built in Kotlin with directory browsing and med
 - Regular Click - Opens/navigates to files and folders normally
 
 ### Keyboard Navigation
-- Left Arrow (←) - Navigate to parent directory (go up one level)
-- Right Arrow (→) - Navigate to next directory in history (if available, like browser forward)
-- Backspace - Alternative way to go to parent directory
+- Navigate files in the directory list with the up (↑) and down (↓) arrows and then selecting a file or subdirectory with enter.
+- Exit viewing of media by pressing escape.
+- Open media in a seperate tab with ctrl-enter
+- Go to parent directory with backspace
 
 ### Search/Filter
-- Start Typing - Automatically filters the file list in real-time. Files and folders are filtered as you type in the search box. Filter is case-insensitive
+- Select filter area and start Files and folders are filtered as you type in the search box. Filter is case-insensitive
 - Sort Controls - Click column headers or sort buttons to reorder files
 - Responsive Layout - Touch-friendly on mobile devices
 
