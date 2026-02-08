@@ -20,6 +20,7 @@ A lightweight, modern web server built in Kotlin with directory browsing and med
 - Navigate files in the directory list with the up (↑) and down (↓) arrows and then selecting a file or subdirectory with enter.
 - Exit viewing of media by pressing escape.
 - Open media in a seperate tab with ctrl-enter
+	- If you open html in view you will see HTML code. If you open with ctrl-enter it will open it as a webpage. [TODO: Need to add long-click for touch devices later]
 - Go to parent directory with backspace
 
 ### Search/Filter
