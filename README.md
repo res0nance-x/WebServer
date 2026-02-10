@@ -13,8 +13,8 @@ A lightweight, modern web server built in Kotlin with directory browsing and med
 
 ## Keyboard Shortcuts & Interactions
 ### Mouse Interactions
-- Ctrl+Click (or Cmd+Click on Mac) - Opens HTML files rendered as HTML in browser instead of downloading
-- Regular Click - Opens/navigates to files and folders normally
+- Ctrl+Click (or Cmd+Click on Mac) - Opens HTML files rendered as HTML in browser instead of viewing HTML code
+- Regular Click - view file or mavigate to folder
 
 ### Keyboard Navigation
 - Navigate files in the directory list with the up (↑) and down (↓) arrows and then selecting a file or subdirectory with enter.
