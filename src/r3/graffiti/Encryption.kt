@@ -2,6 +2,7 @@ package r3.graffiti
 
 import r3.content.ContentMeta
 import r3.io.serialize
+import r3.key.Key256
 import r3.pke.*
 import java.io.ByteArrayOutputStream
 
@@ -22,7 +23,7 @@ fun ContentMeta.encrypt(
 ): EncryptedContentMetaData {
 	val eMeta = Encrypt.encrypt(pass, this.serialize())
 	val (my, cipher) = recipient.createShared()
-	val ePass = cipher.createEncrypt().doFinal(pass.arr)
+	val ePass = Key256(cipher.createEncrypt().doFinal(pass.arr))
 	val sign = author.sign(recipient, encryptedFileHash, eMeta)
 	return EncryptedContentMetaData(
 		eMeta,

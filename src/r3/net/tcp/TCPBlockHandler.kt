@@ -8,7 +8,7 @@ import java.io.FileOutputStream
 import java.io.OutputStream
 import java.math.BigInteger
 
-internal class TCPBlockHandler(private val baseDir: File, val contentHandler: (TCPNode, ByteArray, File?) -> Unit) :
+internal class TCPBlockHandler(private val tmpDir: File, val contentHandler: (TCPNode, ByteArray, File?) -> Unit) :
 	Closeable {
 	class FileStream(val file: File, private val out: OutputStream) : Closeable {
 		constructor(file: File) : this(file, FileOutputStream(file).buffered())
@@ -28,13 +28,23 @@ internal class TCPBlockHandler(private val baseDir: File, val contentHandler: (T
 					// Try multiple times with short backoff to handle transient locks (antivirus, indexing, etc.)
 					var deleted = false
 					repeat(5) {
-						if (!file.exists()) { deleted = true; return@repeat }
-						if (file.delete()) { deleted = true; return@repeat }
-						try { Thread.sleep(50) } catch (_: Exception) { }
+						if (!file.exists()) {
+							deleted = true; return@repeat
+						}
+						if (file.delete()) {
+							deleted = true; return@repeat
+						}
+						try {
+							Thread.sleep(50)
+						} catch (_: Exception) {
+						}
 					}
 					if (!deleted) {
 						// Schedule eventual cleanup via deleteOnExit as a last resort and log
-						try { file.deleteOnExit() } catch (_: Exception) { }
+						try {
+							file.deleteOnExit()
+						} catch (_: Exception) {
+						}
 						log("TCPBlockHandler: unable to delete temp file after retries: $file")
 					}
 				}
@@ -42,6 +52,7 @@ internal class TCPBlockHandler(private val baseDir: File, val contentHandler: (T
 				log("TCPBlockHandler: exception deleting temp file $file: $e")
 			}
 		}
+
 		fun write(data: ByteArray) {
 			out.write(data)
 		}
@@ -50,60 +61,15 @@ internal class TCPBlockHandler(private val baseDir: File, val contentHandler: (T
 	private class StreamData(val header: ByteArray, val fileStream: FileStream, var lastWrite: Long)
 
 	private val map = HashMap<Long, StreamData>()
-	private val tempBase: File = run {
-		val tb = baseDir.resolve(".r3tmp")
-		try {
-			if (!tb.exists()) tb.mkdirs()
-		} catch (_: Exception) {
-		}
-		// Immediately try to delete any leftovers from previous runs (best-effort)
-		try {
-			val files = tb.listFiles()
-			if (files != null) {
-				for (f in files) {
-					try {
-						if (f.isFile) {
-							if (!f.delete()) {
-								log("TCPBlockHandler: unable to delete leftover temp file on startup: $f")
-							}
-						}
-					} catch (_: Exception) {
-					}
-				}
-			}
-		} catch (_: Exception) {
-		}
-		// Register a shutdown hook to try and delete any remaining temp files on JVM exit
-		try {
-			Runtime.getRuntime().addShutdownHook(Thread {
-				try {
-					val files = tb.listFiles()
-					if (files != null) {
-						for (f in files) {
-							try {
-								if (f.isFile) {
-									f.delete()
-								}
-							} catch (_: Exception) {
-							}
-						}
-					}
-				} catch (_: Exception) {
-				}
-			})
-		} catch (_: Throwable) {
-		}
-		tb
-	}
 	private fun createTempFile(): File {
 		// Use JVM temp file creation inside the dedicated temp base directory to avoid collisions
 		return try {
-			File.createTempFile("r3tmp_", null, tempBase)
+			File.createTempFile("r3tmp_", null, tmpDir)
 		} catch (_: Exception) {
 			// Fallback to previous approach if createTempFile fails
 			val arr = srnd.getByteArray(32)
 			val uid = BigInteger(1, arr).toString(32)
-			val f = tempBase.resolve(uid)
+			val f = tmpDir.resolve(uid)
 			f
 		}
 	}
@@ -186,26 +152,6 @@ internal class TCPBlockHandler(private val baseDir: File, val contentHandler: (T
 				}
 			}
 			map.clear()
-		}
-		// Sweep old temp files in the temp base directory to catch leftovers (older than 10 minutes)
-		try {
-			val cutoff = System.currentTimeMillis() - (10 * 60 * 1000)
-			val files = tempBase.listFiles()
-			if (files != null) {
-				for (f in files) {
-					try {
-						if (f.isFile && f.lastModified() < cutoff) {
-							if (!f.delete()) {
-								log("TCPBlockHandler: unable to delete stale temp file: $f")
-							}
-						}
-					} catch (e: Exception) {
-						log("TCPBlockHandler: error deleting stale temp file $f: $e")
-					}
-				}
-			}
-		} catch (e: Exception) {
-			log("TCPBlockHandler: error sweeping temp files: $e")
 		}
 	}
 }

@@ -1,6 +1,6 @@
 package r3.net.discover
 
-import r3.io.log
+import r3.io.debug
 import r3.io.toDataInputStream
 import r3.net.createIP4DatagramSocket
 import r3.net.getScanAddressIterator
@@ -27,7 +27,7 @@ class ScanDiscover() {
 									val info = datagram.data.toDataInputStream().use { dis -> PeerAddressInfo.read(dis) }
 									found(info)
 								} catch (e: Exception) {
-									log("ScanDiscoverIP4: Error reading packet data")
+									debug("ScanDiscoverIP4: Error reading packet data")
 								}
 							}
 						} catch (_: Exception) {
@@ -46,10 +46,10 @@ class ScanDiscover() {
 								sock.send(packet)
 								Thread.sleep(1)
 							} catch (e: Exception) {
-								log("ScanDiscoverIP4: $inf $e")
+								debug("ScanDiscoverIP4: $inf $e")
 							}
 						}
-						log("ScanDiscoverIP4: Scanning took ${(System.currentTimeMillis() - time)} for $inf")
+						debug("ScanDiscoverIP4: Scanning took ${(System.currentTimeMillis() - time)} for $inf")
 						Thread.sleep(500)
 						sock.close()
 					}

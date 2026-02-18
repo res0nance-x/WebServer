@@ -2,7 +2,6 @@ package r3.http.relay
 
 import org.json.JSONObject
 import r3.io.log
-import r3.io.toDataInputStream
 import r3.io.toFileSafe
 import java.io.File
 import java.io.FileInputStream

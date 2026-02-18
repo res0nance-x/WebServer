@@ -14,7 +14,7 @@ open class Key256(val arr: ByteArray) : Comparable<Key256>, Writable {
 
 	init {
 		if (arr.size != 32) {
-			throw RuntimeException("Expected arr of length 32 for bitpollen.pke.Key256 constructor")
+			throw RuntimeException("Expected arr of length 32 for Key256 constructor")
 		}
 	}
 

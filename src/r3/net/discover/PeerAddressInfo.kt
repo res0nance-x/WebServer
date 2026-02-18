@@ -45,4 +45,17 @@ class PeerAddressInfo(val addrList: List<InetAddress>, val port: Int) : Writable
 	override fun toString(): String {
 		return "${key.name} $key ${addrList.joinToString(", ", "[", "]")}:$port"
 	}
+
+	override fun equals(other: Any?): Boolean {
+		if (this === other) return true
+		if (javaClass != other?.javaClass) return false
+
+		other as PeerAddressInfo
+
+		return key == other.key
+	}
+
+	override fun hashCode(): Int {
+		return key.hashCode()
+	}
 }

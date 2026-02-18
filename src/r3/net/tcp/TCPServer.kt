@@ -4,28 +4,31 @@ import r3.io.log
 import r3.net.discover.PeerAddressInfo
 import r3.net.getAddressListInternal
 import r3.pke.RelayKey
-import r3.thread.pthread
 import java.io.Closeable
 import java.io.File
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import kotlin.concurrent.thread
 
 class TCPServer(
+	val nodeList: MutableList<TCPNode> = mutableListOf(),
 	val tempDir: File,
 	val contentHandler: (TCPNode, ByteArray, File?) -> Unit,
 	val address: InetSocketAddress = InetSocketAddress(InetAddress.getLoopbackAddress(), 0)
 ) : Closeable {
 	val socketServer = ServerSocket(address.port, 10, address.address)
-	val addressList = getAddressListInternal()
-	val peerAddressInfo: PeerAddressInfo = PeerAddressInfo(addressList, socketServer.localPort)
+	val peerAddressInfo: PeerAddressInfo = if (address.address.isAnyLocalAddress) {
+		val addressList = getAddressListInternal()
+		PeerAddressInfo(addressList, socketServer.localPort)
+	} else {
+		PeerAddressInfo(listOf(address.address as InetAddress), socketServer.localPort)
+	}
 	val key: RelayKey = peerAddressInfo.key
-	val nodeList = ArrayList<TCPNode>()
-
-	init {
+	fun start(daemon: Boolean = true) {
 		// socket connection listen loop
-		pthread {
+		thread(isDaemon = daemon, name = "TCPServer") {
 			while (!Thread.interrupted() && !socketServer.isClosed) {
 				try {
 					val sock = socketServer.accept()

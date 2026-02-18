@@ -22,7 +22,14 @@ class FileRouter(
 		if (session.method.name != "GET" && session.method.name != "HEAD") {
 			return null
 		}
-		val path = session.uri.substring(1).let { if (it == "") "index.html" else it }
+		val rPath = session.uri.substring(1)
+		val path = if (rPath == "") {
+			"index.html"
+		} else if (rPath.endsWith("/")) {
+			rPath + "index.html"
+		} else {
+			rPath
+		}
 		val filePath = absoluteRootDir.resolve(path).consistentPath()
 
 		if (!filePath.startsWith(absoluteRootDir.consistentPath())) {

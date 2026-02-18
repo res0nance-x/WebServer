@@ -12,17 +12,17 @@ class MulticastDiscoverServer(info: PeerAddressInfo) : Closeable {
 	private val listenSockets = mutableListOf<MulticastSocket>()
 	private val threads = mutableListOf<Thread>()
 	private val data = info.serialize()
+	val ip6FixedMulticastAddress =
+		InetSocketAddress(InetAddress.getByName("ff32:8395:4ab6:e403:8f2a:b92f:beaa:80da"), 45228)
 
-	init {
-		val ip6FixedMulticastAddress =
-			InetSocketAddress(InetAddress.getByName("ff32:8395:4ab6:e403:8f2a:b92f:beaa:80da"), 45228)
-
+	fun start(daemon: Boolean = true): List<Thread> {
+		val threads = mutableListOf<Thread>()
 		for (inf in usableNetworkInterfaceList()) {
 			if (inf.supportsMulticast() && !inf.isLoopback && inf.isUp && !inf.isVirtual) {
 				try {
 					val sock = createMulticastSocket(ip6FixedMulticastAddress, inf)
 					listenSockets.add(sock)
-					val thread = thread {
+					val thread = thread(isDaemon = daemon, name = "MulticastDiscoverServer-$inf") {
 						val buffer = ByteArray(1500)
 						val packet = DatagramPacket(buffer, buffer.size)
 
@@ -46,6 +46,7 @@ class MulticastDiscoverServer(info: PeerAddressInfo) : Closeable {
 				}
 			}
 		}
+		return threads
 	}
 
 	override fun close() {

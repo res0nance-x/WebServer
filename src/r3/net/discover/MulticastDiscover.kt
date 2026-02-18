@@ -1,6 +1,6 @@
 package r3.net.discover
 
-import r3.io.log
+import r3.io.debug
 import r3.io.toDataInputStream
 import r3.net.createIP6DatagramSocket
 import r3.net.usableNetworkInterfaceList
@@ -26,7 +26,7 @@ class MulticastDiscover {
 						sock.receive(datagram)
 						found(PeerAddressInfo.read(datagram.data.toDataInputStream()))
 					} catch (e: Exception) {
-						log("MulticastDiscover: Couldn't create DatagramSocket on $inf with error $e")
+						debug("MulticastDiscover: Couldn't create DatagramSocket on $inf with error $e")
 					}
 				}
 			}

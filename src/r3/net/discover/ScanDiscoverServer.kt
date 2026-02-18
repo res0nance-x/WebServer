@@ -20,8 +20,8 @@ class ScanDiscoverServer(info: PeerAddressInfo) : Closeable {
 	private val data = info.serialize()
 	private val scanPort = 52852
 	private val receiveList = ArrayList<InfSock>()
-
-	init {
+	fun start(daemon: Boolean = true): List<Thread> {
+		val threads = mutableListOf<Thread>()
 		for (inf in NetworkInterface.getNetworkInterfaces()) {
 			if (!inf.isLoopback
 				&& inf.isUp
@@ -31,7 +31,7 @@ class ScanDiscoverServer(info: PeerAddressInfo) : Closeable {
 				try {
 					val sock = inf.createIP4DatagramSocket(scanPort)
 					receiveList.add(InfSock(inf, sock))
-					thread {
+					threads.add(thread(isDaemon = daemon, name = "ScanDiscoverIP4Server-${inf.name}") {
 						val buffer = ByteArray(1500)
 						val packet = DatagramPacket(buffer, buffer.size)
 						while (!Thread.interrupted()) {
@@ -47,12 +47,13 @@ class ScanDiscoverServer(info: PeerAddressInfo) : Closeable {
 								break
 							}
 						}
-					}
+					})
 				} catch (e: Exception) {
 					log("ScanDiscoverIP4Server: $e on $inf")
 				}
 			}
 		}
+		return threads
 	}
 
 	override fun close() {

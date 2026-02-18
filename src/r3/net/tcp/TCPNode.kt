@@ -4,6 +4,7 @@ import r3.io.closeAll
 import r3.io.isNormalSocketClose
 import r3.io.log
 import r3.io.readMaxBytes
+import r3.source.Source
 import r3.thread.pthread
 import r3.util.srnd
 import java.io.*
@@ -76,6 +77,13 @@ class TCPNode(
 		}
 	}
 
+	fun send(header: ByteArray, source: Source) {
+		if (closeRequested) return
+		source.createInputStream().buffered().use {
+			send(header, it)
+		}
+	}
+
 	fun send(header: ByteArray, istream: InputStream) {
 		if (closeRequested) return
 		val id = srnd.nextLong() and 0x7fffffffffffffff
@@ -115,6 +123,10 @@ class TCPNode(
 		if (!outDeque.isEmpty()) {
 			forceClose()
 		}
+	}
+
+	fun isClosed(): Boolean {
+		return closeRequested || socket.isClosed
 	}
 
 	override fun toString(): String {
